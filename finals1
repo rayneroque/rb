@@ -23,18 +23,25 @@ struct PendingRequest {
 };
 
 vector<Room> rooms = {
-    {"101", "Classroom", "Leaking pipe", 1},
-    {"102", "Classroom", "Broken AC", 1},
-    {"CPE Faculty", "Faculty", "Cleaning Maintenance", 1},
-    {"118", "Laboratory Room", "Equipment Maintenance", 1},
-    {"201", "Classroom", "No issue", 2},
-    {"202", "Classroom", "Flickering light", 2},
-    {"CLR", "Computer Laboratory", "Equipment issue, Cleaning issue", 2},
-    {"ECE", "Electrical Room", "Equipment Issue", 2},
-    {"301", "Classroom", "No issue", 3},
-    {"302", "Classroom", "Clogged sink", 3},
-    {"401", "Classroom", "No issue", 4},
-    {"402", "Classroom", "TV not working", 4}
+        Room(101, "Classroom", "Cleaning Maintenance", 1),
+        Room(102, "Classroom", "No issue", 1),
+        Room(CPE Faculty, "Faculty", "Cleaning Maintenance", 1),
+`       Room(302, "Classroom", "No issue", 3),
+        Room(201, "Stock Room", "Equipment Maintenance", 2),
+        Room(302, "Classroom", "Repair Maintenance", 3),
+        Room(CLR1, "Computer Laboratory", "Equipment Maintenance, Cleaning Maintenance ", 2),
+        Room(ECE1, "Electrical Room", "Equipment Issue", 2),
+        Room(102, "Laboratory", "Cleaning Maintenance ", 1),
+        Room(419, "Classroom", "No issue", 4),
+        Room(CLR4, "Computer Laboratory", "Equipment Maintenance ", 2)
+        Room(CLR2, "Computer Laboratory", "Equipment Maintenance", 2)
+        Room(EE Faculty, "Faculty", "Cleaning Maintenance", 1)
+        Room(317, "Classroom", "No issue", 3)
+        Room(421, "Classroom", "Cleaning Maintenance, Equipment Maintenance", 4)
+        Room(117, "Laboratory", "Repair Maintenance ", 1)
+        Room(CE Faculty, "Faculty", "Repair Maintenance ", 1)
+        Room(CLR1, "Computer Laboratory", "Equipment Maintenance", 2)
+        Room(402, "Classroom", "Repair Maintenance", 4)
 };
 vector<PendingRequest> pending;
 
