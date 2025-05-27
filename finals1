@@ -8,6 +8,7 @@
 using namespace std;
 
 // --- Constants ---
+// List of allowed room types and issues for validation and user selection
 const string ALLOWED_ROOM_TYPES[] = {
     "Classroom", "Faculty", "Laboratory Room", "Computer Laboratory", "Electrical Room"
 };
@@ -16,33 +17,41 @@ const string ALLOWED_ISSUES[] = {
     "Repair Maintenance",
     "Equipment Maintenance"
 };
-const int DESIGN_WIDTH = 110;
-const string BORDER_CHAR = "*";
+const int DESIGN_WIDTH = 110;      // Width for UI display
+const string BORDER_CHAR = "*";    // Character for display borders
 
 // --- Structs ---
+// Room structure, used for room storage within a FloorNode
 struct Room {
     string number, type, issue;
 };
 
+// Structure to store a pending maintenance request for a room
 struct PendingRequest {
     string number, issue;
 };
 
-// Tree Node: Each floor contains a list of rooms
+// Each floor is represented as a node containing all rooms on that floor
 struct FloorNode {
     int floorNumber;
     vector<Room> rooms;
 };
 
 // --- Tree Data Structures ---
-map<int, FloorNode> building; // key: floor number, value: FloorNode
-vector<PendingRequest> pending;
+// The "building" map represents the tree: floor number -> all rooms on that floor
+map<int, FloorNode> building;
+vector<PendingRequest> pending; // Stores all pending maintenance requests
 
 // --- Helper Functions ---
+// Below functions handle formatted and centered output for the UI
+
+// Print a full-width border line
 void coutBorder() {
     for (int i = 0; i < DESIGN_WIDTH; ++i) cout << BORDER_CHAR;
     cout << endl;
 }
+
+// Print text centered within a bordered line
 void coutCentered(const string& text, char pad = ' ') {
     int inner_width = DESIGN_WIDTH - 2;
     int padding = (inner_width - text.size()) / 2;
@@ -53,6 +62,8 @@ void coutCentered(const string& text, char pad = ' ') {
     for (int i = 0; i < inner_width - padding - text.size(); ++i) cout << pad;
     cout << BORDER_CHAR << endl;
 }
+
+// Print a left-aligned menu option (for the main and search menus)
 void coutLeftAlignedOption(const string& text) {
     int inner_width = DESIGN_WIDTH - 2;
     int padding = inner_width - 1 - text.size();
@@ -61,11 +72,15 @@ void coutLeftAlignedOption(const string& text) {
     for (int i = 0; i < padding; ++i) cout << ' ';
     cout << BORDER_CHAR << endl;
 }
+
+// Print an empty line with borders
 void coutEmptyLine() {
     cout << BORDER_CHAR;
     for (int i = 0; i < DESIGN_WIDTH-2; ++i) cout << ' ';
     cout << BORDER_CHAR << endl;
 }
+
+// Display the room details with the floor context in a bordered box
 void showRoom(int floor, const Room& r) {
     coutBorder();
     coutEmptyLine();
@@ -75,6 +90,8 @@ void showRoom(int floor, const Room& r) {
     coutEmptyLine();
     coutBorder();
 }
+
+// Utility: checks if a string contains only digits (for room number sorting)
 bool isFullyNumeric(const string& s) {
     if (s.empty()) return false;
     for (char c : s) if (!isdigit(c)) return false;
@@ -82,9 +99,12 @@ bool isFullyNumeric(const string& s) {
 }
 
 // --- Tree-based Data Loading & Deduplication ---
+// FlatRoom is used for initial data input before it is organized by floor
 struct FlatRoom { string number, type, issue; int floor; };
+
+// Initial merged room data (some may have duplicates for the same (number, floor))
 vector<FlatRoom> merged_rooms = {
-    // ... (same as previous merged_rooms, omitted for brevity)
+    // ... (room data entries here, omitted for brevity)
     {"101", "Classroom", "Cleaning Maintenance", 1},
     {"102", "Classroom", "No issue", 1},
     {"CPE Faculty", "Faculty", "Cleaning Maintenance", 1},
@@ -126,8 +146,10 @@ vector<FlatRoom> merged_rooms = {
     {"215", "Classroom", "Cleaning Maintenance", 2},
     {"217", "Classroom", "No Issue", 2}
 };
+
+// Builds the tree structure from flat data, deduplicating by (room number, floor)
 void buildTree() {
-    set<pair<string,int>> seen;
+    set<pair<string,int>> seen; // Used to deduplicate rooms
     for (auto& r : merged_rooms) {
         auto key = make_pair(r.number, r.floor);
         if (seen.count(key) == 0) {
@@ -140,6 +162,8 @@ void buildTree() {
 }
 
 // --- Tree-based Operations ---
+
+// Display all rooms on a specified floor (sorted by number/type)
 void showRoomsByFloor() {
     int floor;
     cout << endl; coutBorder();
@@ -156,7 +180,7 @@ void showRoomsByFloor() {
         coutEmptyLine(); coutBorder();
         return;
     }
-    // Sort rooms on the floor
+    // Sort rooms using a logical order (numeric, then CLR/ECE, then alpha)
     auto& rooms = it->second.rooms;
     sort(rooms.begin(), rooms.end(), [](const Room& a, const Room& b) {
         bool a_num = isFullyNumeric(a.number);
@@ -175,6 +199,8 @@ void showRoomsByFloor() {
     });
     for (const auto& r : rooms) showRoom(floor, r);
 }
+
+// Search for rooms by their number (substring search)
 void searchRoomsByNumber() {
     cin.ignore();
     coutBorder(); coutEmptyLine();
@@ -194,6 +220,8 @@ void searchRoomsByNumber() {
         coutEmptyLine(); coutBorder();
     }
 }
+
+// Search for rooms by their type (selected from menu)
 void searchRoomsByType() {
     coutBorder(); coutEmptyLine();
     coutCentered("Available Room Types:");
@@ -224,6 +252,8 @@ void searchRoomsByType() {
         coutCentered("No rooms of this type."); coutEmptyLine(); coutBorder();
     }
 }
+
+// Search for rooms by their current issue (selected from menu)
 void searchRoomsByIssue() {
     coutBorder(); coutEmptyLine();
     coutCentered("Available Issues:");
@@ -254,6 +284,8 @@ void searchRoomsByIssue() {
         coutCentered("No rooms with this issue."); coutEmptyLine(); coutBorder();
     }
 }
+
+// Handles the search menu, lets user pick search type
 void searchRoomsMenu() {
     while (true) {
         coutBorder(); coutEmptyLine();
@@ -277,12 +309,16 @@ void searchRoomsMenu() {
     }
     coutBorder();
 }
+
+// Check if a request for a room/issue is already pending
 bool isDuplicateReq(const string& num, const string& issue) {
     for (const auto& req : pending)
         if (req.number == num && req.issue == issue)
             return true;
     return false;
 }
+
+// Handles adding a maintenance request for a room
 void requestIssue() {
     cin.ignore();
     coutBorder(); coutEmptyLine();
@@ -291,6 +327,7 @@ void requestIssue() {
     string num; getline(cin, num);
     Room* roomptr = nullptr;
     int floor_of_room = -1;
+    // Find the room pointer by searching the tree
     for (auto& [floor, node] : building) {
         for (auto& r : node.rooms) {
             if (r.number == num) { roomptr = &r; floor_of_room = floor; break; }
@@ -315,21 +352,25 @@ void requestIssue() {
         return;
     }
     string issue = ALLOWED_ISSUES[choice-1];
+    // Prevent duplicate requests for the same room/issue pair
     if (isDuplicateReq(num, issue)) {
         coutBorder(); coutEmptyLine();
         coutCentered("Already a pending request for this issue in this room.");
         coutEmptyLine(); coutBorder(); return;
     }
-    roomptr->issue = issue;
-    pending.push_back({num, issue});
+    roomptr->issue = issue;                  // Update the issue for the room
+    pending.push_back({num, issue});         // Add new pending request
     coutBorder(); coutEmptyLine();
     coutCentered("Request added."); coutEmptyLine(); coutBorder();
 }
+
+// Displays all pending requests in order by floor/room number
 void showPending() {
     if (pending.empty()) {
         coutBorder(); coutEmptyLine();
         coutCentered("No pending requests."); coutEmptyLine(); coutBorder(); return;
     }
+    // Prepare a sorted list of <floor, room number, pointer to Room>
     vector<tuple<int,string,Room*>> order;
     for (const auto& req : pending) {
         for (auto& [floor, node] : building) {
@@ -340,6 +381,7 @@ void showPending() {
             }
         }
     }
+    // Sort by floor, then room number (numeric/CLR/ECE/alpha)
     sort(order.begin(), order.end(), [](const tuple<int,string,Room*>& a, const tuple<int,string,Room*>& b){
         if (get<0>(a) != get<0>(b)) return get<0>(a) < get<0>(b);
         bool a_num = isFullyNumeric(get<1>(a));
@@ -358,18 +400,22 @@ void showPending() {
     });
     coutBorder(); coutEmptyLine();
     coutCentered("Pending Requests:"); coutEmptyLine(); coutBorder();
+    // Display each pending request's room summary
     for (const auto& o : order) showRoom(get<0>(o), *get<2>(o));
 }
 
 // --- Main ---
+// Main menu loop and application entry point
 int main() {
-    buildTree();
+    buildTree(); // Organize and deduplicate rooms into the tree
     coutBorder(); coutEmptyLine();
+    // Welcome banner
     cout << "*                              ░█▀▀░▀█▀░█░█░█▀▀░█▀█░█▀▄░█▀▀░▄▀▄░█░█░█▀▀░█▀▀░▀█▀                              *" << endl;
     cout << "*                              ░█▀▀░░█░░▄▀▄░█▀▀░█░█░█▀▄░█▀▀░█ █░█░█░█▀▀░▀▀█░░█░                              *" << endl;
     cout << "*                              ░▀░░░▀▀▀░▀░▀░▀▀▀░▀░▀░▀░▀░▀▀▀░░▀▀▀░▀░░▀▀▀░▀▀▀░░▀░                              *" << endl;
     coutCentered("Welcome to fixENrequest!");
     coutEmptyLine(); coutBorder();
+    // Main menu with options loop
     while (true) {
         coutEmptyLine();
         coutCentered("MAIN MENU");
