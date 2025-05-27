@@ -2,6 +2,7 @@
 #include <vector>
 #include <algorithm>
 #include <string>
+#include <cctype>
 using namespace std;
 
 const string ALLOWED_ROOM_TYPES[] = {
@@ -23,25 +24,24 @@ struct PendingRequest {
 };
 
 vector<Room> rooms = {
-        Room(101, "Classroom", "Cleaning Maintenance", 1),
-        Room(102, "Classroom", "No issue", 1),
-        Room(CPE Faculty, "Faculty", "Cleaning Maintenance", 1),
-`       Room(302, "Classroom", "No issue", 3),
-        Room(201, "Stock Room", "Equipment Maintenance", 2),
-        Room(302, "Classroom", "Repair Maintenance", 3),
-        Room(CLR1, "Computer Laboratory", "Equipment Maintenance, Cleaning Maintenance ", 2),
-        Room(ECE1, "Electrical Room", "Equipment Issue", 2),
-        Room(102, "Laboratory", "Cleaning Maintenance ", 1),
-        Room(419, "Classroom", "No issue", 4),
-        Room(CLR4, "Computer Laboratory", "Equipment Maintenance ", 2)
-        Room(CLR2, "Computer Laboratory", "Equipment Maintenance", 2)
-        Room(EE Faculty, "Faculty", "Cleaning Maintenance", 1)
-        Room(317, "Classroom", "No issue", 3)
-        Room(421, "Classroom", "Cleaning Maintenance, Equipment Maintenance", 4)
-        Room(117, "Laboratory", "Repair Maintenance ", 1)
-        Room(CE Faculty, "Faculty", "Repair Maintenance ", 1)
-        Room(CLR1, "Computer Laboratory", "Equipment Maintenance", 2)
-        Room(402, "Classroom", "Repair Maintenance", 4)
+    {"101", "Classroom", "Cleaning Maintenance", 1},
+    {"102", "Classroom", "No issue", 1},
+    {"CPE Faculty", "Faculty", "Cleaning Maintenance", 1},
+    {"302", "Classroom", "No issue", 3},
+    {"201", "Stock Room", "Equipment Maintenance", 2},
+    {"302A", "Classroom", "Repair Maintenance", 3},
+    {"CLR1", "Computer Laboratory", "Equipment Maintenance, Cleaning Maintenance", 2},
+    {"ECE1", "Electrical Room", "Equipment Issue", 2},
+    {"102A", "Laboratory Room", "Cleaning Maintenance", 1},
+    {"419", "Classroom", "No issue", 4},
+    {"CLR4", "Computer Laboratory", "Equipment Maintenance", 2},
+    {"CLR2", "Computer Laboratory", "Equipment Maintenance", 2},
+    {"EE Faculty", "Faculty", "Cleaning Maintenance", 1},
+    {"317", "Classroom", "No issue", 3},
+    {"421", "Classroom", "Cleaning Maintenance, Equipment Maintenance", 4},
+    {"117", "Laboratory Room", "Repair Maintenance", 1},
+    {"CE Faculty", "Faculty", "Repair Maintenance", 1},
+    {"402", "Classroom", "Repair Maintenance", 4}
 };
 vector<PendingRequest> pending;
 
@@ -50,13 +50,49 @@ void showRoom(const Room& r) {
          << "\nIssue: " << r.issue << "\n-------------------------\n";
 }
 
+// Helper: true if fully numeric, false otherwise
+bool isFullyNumeric(const string& s) {
+    if (s.empty()) return false;
+    for (char c : s) if (!isdigit(c)) return false;
+    return true;
+}
+
 void showRoomsByFloor() {
     int floor;
     cout << "\nEnter floor (1-4): "; cin >> floor;
-    bool found = false;
+    // Collect all rooms for the given floor
+    vector<Room> filtered;
     for (const auto& r : rooms)
-        if (r.floor == floor) { showRoom(r); found = true; }
-    if (!found) cout << "No rooms on this floor.\n";
+        if (r.floor == floor)
+            filtered.push_back(r);
+
+    if (filtered.empty()) {
+        cout << "No rooms on this floor.\n";
+        return;
+    }
+
+    // Sort: numeric room numbers first (in numeric order!), then others (CLR/ECE/etc) lex
+    sort(filtered.begin(), filtered.end(), [](const Room& a, const Room& b) {
+        bool a_num = isFullyNumeric(a.number);
+        bool b_num = isFullyNumeric(b.number);
+        if (a_num && !b_num) return true;
+        if (!a_num && b_num) return false;
+        // Both numeric: sort numerically
+        if (a_num && b_num) return stoi(a.number) < stoi(b.number);
+        // Both non-numeric: group CLR/ECE together, then lex
+        auto isCLRorECE = [](const string& num) {
+            return num.find("CLR") == 0 || num.find("ECE") == 0;
+        };
+        bool a_clr_ece = isCLRorECE(a.number);
+        bool b_clr_ece = isCLRorECE(b.number);
+        if (a_clr_ece && !b_clr_ece) return true;
+        if (!a_clr_ece && b_clr_ece) return false;
+        // Both CLR/ECE or both not: sort lexicographically
+        return a.number < b.number;
+    });
+
+    for (const auto& r : filtered)
+        showRoom(r);
 }
 
 void searchRoomsByNumber() {
@@ -146,7 +182,7 @@ void requestIssue() {
 
 void showPending() {
     if (pending.empty()) { cout << "No pending requests.\n"; return; }
-    // Sort by floor then room number
+    // Sort by floor then room number (with same logic as showRoomsByFloor)
     vector<pair<int,string>> order;
     for (const auto& req : pending) {
         auto rit = find_if(rooms.begin(), rooms.end(),
@@ -154,7 +190,24 @@ void showPending() {
         int fl = rit != rooms.end() ? rit->floor : 99;
         order.push_back({fl, req.number});
     }
-    sort(order.begin(), order.end());
+    sort(order.begin(), order.end(), [](const pair<int,string>& a, const pair<int,string>& b){
+        if (a.first != b.first) return a.first < b.first;
+        // Use same logic as showRoomsByFloor for ordering number
+        bool a_num = isFullyNumeric(a.second);
+        bool b_num = isFullyNumeric(b.second);
+        if (a_num && !b_num) return true;
+        if (!a_num && b_num) return false;
+        if (a_num && b_num) return stoi(a.second) < stoi(b.second);
+        // Both non-numeric: group CLR/ECE together, then lex
+        auto isCLRorECE = [](const string& num) {
+            return num.find("CLR") == 0 || num.find("ECE") == 0;
+        };
+        bool a_clr_ece = isCLRorECE(a.second);
+        bool b_clr_ece = isCLRorECE(b.second);
+        if (a_clr_ece && !b_clr_ece) return true;
+        if (!a_clr_ece && b_clr_ece) return false;
+        return a.second < b.second;
+    });
     cout << "\nPending Requests:\n";
     for (const auto& o : order) {
         auto rit = find_if(rooms.begin(), rooms.end(),
