@@ -1,38 +1,90 @@
-// Include necessary standard library headers
 #include <iostream>
 #include <vector>
 #include <algorithm>
 #include <string>
 #include <cctype>
 #include <set>
+#include <map>
 using namespace std;
 
-// List of allowed room types (for validation and selection)
+// --- Constants ---
 const string ALLOWED_ROOM_TYPES[] = {
     "Classroom", "Faculty", "Laboratory Room", "Computer Laboratory", "Electrical Room"
 };
-// List of allowed issue types (for validation and selection)
 const string ALLOWED_ISSUES[] = {
     "Cleaning Maintenance",
     "Repair Maintenance",
     "Equipment Maintenance"
 };
+const int DESIGN_WIDTH = 110;
+const string BORDER_CHAR = "*";
 
-// Structure to store information about a room
+// --- Structs ---
 struct Room {
-    string number, type, issue; // Room number, type, and current issue
-    int floor;                  // Floor number
+    string number, type, issue;
 };
 
-// Structure to represent a pending maintenance request for a room
 struct PendingRequest {
-    string number, issue; // Room number and issue being requested
+    string number, issue;
 };
 
-// --- Merge all data and remove duplicates based on room number and floor ---
-// List of all rooms (with some duplicates and alternate data), to be deduplicated later
-vector<Room> merged_rooms = {
-    // Existing data (original)
+// Tree Node: Each floor contains a list of rooms
+struct FloorNode {
+    int floorNumber;
+    vector<Room> rooms;
+};
+
+// --- Tree Data Structures ---
+map<int, FloorNode> building; // key: floor number, value: FloorNode
+vector<PendingRequest> pending;
+
+// --- Helper Functions ---
+void coutBorder() {
+    for (int i = 0; i < DESIGN_WIDTH; ++i) cout << BORDER_CHAR;
+    cout << endl;
+}
+void coutCentered(const string& text, char pad = ' ') {
+    int inner_width = DESIGN_WIDTH - 2;
+    int padding = (inner_width - text.size()) / 2;
+    if (padding < 0) padding = 0;
+    cout << BORDER_CHAR;
+    for (int i = 0; i < padding; ++i) cout << pad;
+    cout << text;
+    for (int i = 0; i < inner_width - padding - text.size(); ++i) cout << pad;
+    cout << BORDER_CHAR << endl;
+}
+void coutLeftAlignedOption(const string& text) {
+    int inner_width = DESIGN_WIDTH - 2;
+    int padding = inner_width - 1 - text.size();
+    if (padding < 0) padding = 0;
+    cout << BORDER_CHAR << " " << text;
+    for (int i = 0; i < padding; ++i) cout << ' ';
+    cout << BORDER_CHAR << endl;
+}
+void coutEmptyLine() {
+    cout << BORDER_CHAR;
+    for (int i = 0; i < DESIGN_WIDTH-2; ++i) cout << ' ';
+    cout << BORDER_CHAR << endl;
+}
+void showRoom(int floor, const Room& r) {
+    coutBorder();
+    coutEmptyLine();
+    coutCentered("Room: " + r.number + " (Floor " + to_string(floor) + ")");
+    coutCentered("Type: " + r.type);
+    coutCentered("Issue: " + r.issue);
+    coutEmptyLine();
+    coutBorder();
+}
+bool isFullyNumeric(const string& s) {
+    if (s.empty()) return false;
+    for (char c : s) if (!isdigit(c)) return false;
+    return true;
+}
+
+// --- Tree-based Data Loading & Deduplication ---
+struct FlatRoom { string number, type, issue; int floor; };
+vector<FlatRoom> merged_rooms = {
+    // ... (same as previous merged_rooms, omitted for brevity)
     {"101", "Classroom", "Cleaning Maintenance", 1},
     {"102", "Classroom", "No issue", 1},
     {"CPE Faculty", "Faculty", "Cleaning Maintenance", 1},
@@ -51,8 +103,6 @@ vector<Room> merged_rooms = {
     {"117", "Laboratory Room", "Repair Maintenance", 1},
     {"CE Faculty", "Faculty", "Repair Maintenance", 1},
     {"402", "Classroom", "Repair Maintenance", 4},
-
-    // New data (to be merged, see below for deduplication)
     {"201", "Classroom", "No Issue", 2},
     {"205", "Classroom", "No Issue", 2},
     {"219", "Classroom", "Cleaning Maintenance", 2},
@@ -66,8 +116,6 @@ vector<Room> merged_rooms = {
     {"CLR7", "Computer Laboratory", "Cleaning Maintenance", 2},
     {"CLR6", "Computer Laboratory", "No Issue", 2},
     {"CLR5", "Computer Laboratory", "No Issue", 2},
-    // CLR4 exists above, but with different issue, so keep both for review
-    // CLR2 exists above, but with different issue, so keep both for review
     {"ECE4", "Electrical Room", "Cleaning Maintenance", 2},
     {"ECE3", "Electrical Room", "Cleaning Maintenance", 2},
     {"ECE2", "Electrical Room", "Cleaning Maintenance", 2},
@@ -78,82 +126,20 @@ vector<Room> merged_rooms = {
     {"215", "Classroom", "Cleaning Maintenance", 2},
     {"217", "Classroom", "No Issue", 2}
 };
-
-// Deduplicate: keep the *first* occurrence of a (number, floor) pair.
-vector<Room> rooms; // This will hold the deduplicated list of rooms
-
-// Fills the 'rooms' vector with unique rooms based on (number, floor)
-void deduplicate_rooms() {
-    set<pair<string, int>> seen; // To track unique (number, floor) pairs
-    for (const auto& r : merged_rooms) {
+void buildTree() {
+    set<pair<string,int>> seen;
+    for (auto& r : merged_rooms) {
         auto key = make_pair(r.number, r.floor);
-        if (seen.count(key) == 0) { // If not yet seen, add to rooms
-            rooms.push_back(r);
+        if (seen.count(key) == 0) {
             seen.insert(key);
+            Room room = {r.number, r.type, r.issue};
+            building[r.floor].floorNumber = r.floor;
+            building[r.floor].rooms.push_back(room);
         }
     }
 }
 
-vector<PendingRequest> pending; // List of pending maintenance requests
-
-// --- Design helpers for UI output style ---
-const int DESIGN_WIDTH = 110; // Width for display box
-const string BORDER_CHAR = "*"; // Character for borders
-
-// Outputs a border line
-void coutBorder() {
-    for (int i = 0; i < DESIGN_WIDTH; ++i) cout << BORDER_CHAR;
-    cout << endl;
-}
-
-// Outputs text centered within the design width, padded with 'pad'
-void coutCentered(const string& text, char pad = ' ') {
-    int inner_width = DESIGN_WIDTH - 2;
-    int padding = (inner_width - text.size()) / 2;
-    if (padding < 0) padding = 0;
-    cout << BORDER_CHAR;
-    for (int i = 0; i < padding; ++i) cout << pad;
-    cout << text;
-    for (int i = 0; i < inner_width - padding - text.size(); ++i) cout << pad;
-    cout << BORDER_CHAR << endl;
-}
-
-// Outputs a left-aligned option line with border
-void coutLeftAlignedOption(const string& text) {
-    int inner_width = DESIGN_WIDTH - 2;
-    int padding = inner_width - 1 - text.size();
-    if (padding < 0) padding = 0;
-    cout << BORDER_CHAR << " " << text;
-    for (int i = 0; i < padding; ++i) cout << ' ';
-    cout << BORDER_CHAR << endl;
-}
-
-// Outputs an empty line with border
-void coutEmptyLine() {
-    cout << BORDER_CHAR;
-    for (int i = 0; i < DESIGN_WIDTH-2; ++i) cout << ' ';
-    cout << BORDER_CHAR << endl;
-}
-
-// Displays room information in a bordered box
-void showRoom(const Room& r) {
-    coutBorder();
-    coutEmptyLine();
-    coutCentered("Room: " + r.number);
-    coutCentered("Type: " + r.type);
-    coutCentered("Issue: " + r.issue);
-    coutEmptyLine();
-    coutBorder();
-}
-
-// Checks if a string contains only digits
-bool isFullyNumeric(const string& s) {
-    if (s.empty()) return false;
-    for (char c : s) if (!isdigit(c)) return false;
-    return true;
-}
-
-// Displays all rooms that are on a given floor, sorted smartly
+// --- Tree-based Operations ---
 void showRoomsByFloor() {
     int floor;
     cout << endl; coutBorder();
@@ -163,24 +149,16 @@ void showRoomsByFloor() {
     coutBorder();
     cout << "                                                 CHOICE: ";
     cin >> floor;
-    vector<Room> filtered;
-    // Collect all rooms on the selected floor
-    for (const auto& r : rooms)
-        if (r.floor == floor)
-            filtered.push_back(r);
-
-    if (filtered.empty()) {
-        // No rooms found
-        coutBorder();
-        coutEmptyLine();
+    auto it = building.find(floor);
+    if (it == building.end() || it->second.rooms.empty()) {
+        coutBorder(); coutEmptyLine();
         coutCentered("No rooms on this floor.");
-        coutEmptyLine();
-        coutBorder();
+        coutEmptyLine(); coutBorder();
         return;
     }
-
-    // Sort by room number: numerics first, then CLR/ECE, then others alphabetically
-    sort(filtered.begin(), filtered.end(), [](const Room& a, const Room& b) {
+    // Sort rooms on the floor
+    auto& rooms = it->second.rooms;
+    sort(rooms.begin(), rooms.end(), [](const Room& a, const Room& b) {
         bool a_num = isFullyNumeric(a.number);
         bool b_num = isFullyNumeric(b.number);
         if (a_num && !b_num) return true;
@@ -195,139 +173,96 @@ void showRoomsByFloor() {
         if (!a_clr_ece && b_clr_ece) return false;
         return a.number < b.number;
     });
-
-    // Display each room
-    for (const auto& r : filtered)
-        showRoom(r);
+    for (const auto& r : rooms) showRoom(floor, r);
 }
-
-// Searches for rooms by room number substring
 void searchRoomsByNumber() {
     cin.ignore();
-    coutBorder();
-    coutEmptyLine();
+    coutBorder(); coutEmptyLine();
     coutCentered("Enter room number to search:");
-    coutEmptyLine();
-    coutBorder();
+    coutEmptyLine(); coutBorder();
     cout << "                                                 CHOICE: ";
     string key; getline(cin, key);
     bool found = false;
-    // Show rooms whose number contains the search string
-    for (const auto& r : rooms) {
-        if (r.number.find(key) != string::npos) {
-            showRoom(r); found = true;
-        }
-    }
+    for (auto& [floor, node] : building)
+        for (const auto& r : node.rooms)
+            if (r.number.find(key) != string::npos) {
+                showRoom(floor, r); found = true;
+            }
     if (!found) {
-        coutBorder();
-        coutEmptyLine();
+        coutBorder(); coutEmptyLine();
         coutCentered("No rooms found with that number.");
-        coutEmptyLine();
-        coutBorder();
+        coutEmptyLine(); coutBorder();
     }
 }
-
-// Shows menu and handles searching rooms by type
 void searchRoomsByType() {
-    coutBorder();
-    coutEmptyLine();
+    coutBorder(); coutEmptyLine();
     coutCentered("Available Room Types:");
     coutEmptyLine();
-    // Print the available types, centered
     for (int i = 0; i < 5; ++i) {
-        int center = (DESIGN_WIDTH - 2) / 26 - 4; // Centering
+        int center = (DESIGN_WIDTH - 2) / 26 - 4;
         string option = to_string(i+1) + ". " + ALLOWED_ROOM_TYPES[i];
         string padded(center, ' ');
         coutCentered(padded + option);
     }
-    coutEmptyLine();
-    coutBorder();
-
+    coutEmptyLine(); coutBorder();
     int choice;
     coutCentered("Select Room Type (1-5):");
-    coutEmptyLine();
-    coutBorder();
+    coutEmptyLine(); coutBorder();
     cout << "                                                 CHOICE: ";
     cin >> choice;
     if (choice < 1 || choice > 5) {
-        coutBorder();
-        coutEmptyLine();
-        coutCentered("Invalid choice.");
-        coutEmptyLine();
-        coutBorder();
-        return;
+        coutBorder(); coutEmptyLine();
+        coutCentered("Invalid choice."); coutEmptyLine(); coutBorder(); return;
     }
     string type = ALLOWED_ROOM_TYPES[choice-1];
     bool found = false;
-    // Show rooms of the chosen type
-    for (const auto& r : rooms)
-        if (r.type == type) { showRoom(r); found = true; }
+    for (auto& [floor, node] : building)
+        for (const auto& r : node.rooms)
+            if (r.type == type) { showRoom(floor, r); found = true; }
     if (!found) {
-        coutBorder();
-        coutEmptyLine();
-        coutCentered("No rooms of this type.");
-        coutEmptyLine();
-        coutBorder();
+        coutBorder(); coutEmptyLine();
+        coutCentered("No rooms of this type."); coutEmptyLine(); coutBorder();
     }
 }
-
-// Shows menu and handles searching rooms by issue
 void searchRoomsByIssue() {
-    coutBorder();
-    coutEmptyLine();
+    coutBorder(); coutEmptyLine();
     coutCentered("Available Issues:");
     coutEmptyLine();
-    // Print the available issues, centered
     for (int i = 0; i < 3; ++i) {
-        int center = (DESIGN_WIDTH - 2) / 24 - 4; // Centering
-        string option = to_string(i+1) + ". " + ALLOWED_ISSUES[i]; 
-        string padded(center, ' '); 
+        int center = (DESIGN_WIDTH - 2) / 24 - 4;
+        string option = to_string(i+1) + ". " + ALLOWED_ISSUES[i];
+        string padded(center, ' ');
         coutCentered(padded + option);
     }
-    coutEmptyLine();
-    coutBorder();
-
+    coutEmptyLine(); coutBorder();
     int choice;
     coutCentered("Select Issue Type (1-3):");
-    coutEmptyLine();
-    coutBorder();
+    coutEmptyLine(); coutBorder();
     cout << "                                                 CHOICE: ";
     cin >> choice;
     if (choice < 1 || choice > 3) {
-        coutBorder();
-        coutEmptyLine();
-        coutCentered("Invalid choice.");
-        coutEmptyLine();
-        coutBorder();
-        return;
+        coutBorder(); coutEmptyLine();
+        coutCentered("Invalid choice."); coutEmptyLine(); coutBorder(); return;
     }
     string issue = ALLOWED_ISSUES[choice-1];
     bool found = false;
-    // Show rooms whose issue contains the chosen type
-    for (const auto& r : rooms)
-        if (r.issue.find(issue) != string::npos) { showRoom(r); found = true; }
+    for (auto& [floor, node] : building)
+        for (const auto& r : node.rooms)
+            if (r.issue.find(issue) != string::npos) { showRoom(floor, r); found = true; }
     if (!found) {
-        coutBorder();
-        coutEmptyLine();
-        coutCentered("No rooms with this issue.");
-        coutEmptyLine();
-        coutBorder();
+        coutBorder(); coutEmptyLine();
+        coutCentered("No rooms with this issue."); coutEmptyLine(); coutBorder();
     }
 }
-
-// Menu for searching rooms (by number, type, or issue)
 void searchRoomsMenu() {
     while (true) {
-        coutBorder();
-        coutEmptyLine();
-        coutCentered("Search Rooms by:");
-        coutEmptyLine();
+        coutBorder(); coutEmptyLine();
+        coutCentered("Search Rooms by:"); coutEmptyLine();
         coutLeftAlignedOption("                                             [1] Room Number");
         coutLeftAlignedOption("                                             [2] Room Type");
         coutLeftAlignedOption("                                             [3] Issues");
         coutLeftAlignedOption("                                             [0] Back");
-        coutEmptyLine();
-        coutBorder();
+        coutEmptyLine(); coutBorder();
         cout << "                                                 CHOICE: ";
         int ch; cin >> ch;
         if (cin.fail()) { cin.clear(); cin.ignore(10000,'\n'); continue; }
@@ -336,147 +271,105 @@ void searchRoomsMenu() {
         else if (ch == 3) searchRoomsByIssue();
         else if (ch == 0) break;
         else {
-            coutBorder();
-            coutEmptyLine();
-            coutCentered("Invalid option.");
-            coutEmptyLine();
-            coutBorder();
+            coutBorder(); coutEmptyLine();
+            coutCentered("Invalid option."); coutEmptyLine(); coutBorder();
         }
     }
     coutBorder();
 }
-
-// Checks if a request for the same room and issue is already pending
 bool isDuplicateReq(const string& num, const string& issue) {
     for (const auto& req : pending)
         if (req.number == num && req.issue == issue)
             return true;
     return false;
 }
-
-// Handles requesting maintenance for a room (adds to pending requests)
 void requestIssue() {
     cin.ignore();
-    coutBorder();
-    coutEmptyLine();
-    coutCentered("Enter room number:");
-    coutEmptyLine();
-    coutBorder();
+    coutBorder(); coutEmptyLine();
+    coutCentered("Enter room number:"); coutEmptyLine(); coutBorder();
     cout << "                                                 CHOICE: ";
     string num; getline(cin, num);
-    // Find the room in the room list
-    auto it = find_if(rooms.begin(), rooms.end(),
-        [&](const Room& r){ return r.number == num; });
-    if (it == rooms.end()) {
-        coutBorder();
-        coutEmptyLine();
-        coutCentered("Room not found.");
-        coutEmptyLine();
-        coutBorder();
+    Room* roomptr = nullptr;
+    int floor_of_room = -1;
+    for (auto& [floor, node] : building) {
+        for (auto& r : node.rooms) {
+            if (r.number == num) { roomptr = &r; floor_of_room = floor; break; }
+        }
+        if (roomptr) break;
+    }
+    if (!roomptr) {
+        coutBorder(); coutEmptyLine();
+        coutCentered("Room not found."); coutEmptyLine(); coutBorder();
         return;
     }
-
-    coutBorder();
-    coutEmptyLine();
-    coutCentered("Select issue type:");
-    coutEmptyLine();
+    coutBorder(); coutEmptyLine();
+    coutCentered("Select issue type:"); coutEmptyLine();
     for (int i = 0; i < 3; ++i)
         coutCentered(to_string(i+1) + ". " + ALLOWED_ISSUES[i]);
-    coutEmptyLine();
-    coutBorder();
+    coutEmptyLine(); coutBorder();
     cout << "                                                 CHOICE: ";
     int choice; cin >> choice;
     if (choice < 1 || choice > 3) {
-        coutBorder();
-        coutEmptyLine();
-        coutCentered("Invalid choice.");
-        coutEmptyLine();
-        coutBorder();
+        coutBorder(); coutEmptyLine();
+        coutCentered("Invalid choice."); coutEmptyLine(); coutBorder();
         return;
     }
     string issue = ALLOWED_ISSUES[choice-1];
-
-    // Prevent adding duplicate requests for same room and issue
     if (isDuplicateReq(num, issue)) {
-        coutBorder();
-        coutEmptyLine();
+        coutBorder(); coutEmptyLine();
         coutCentered("Already a pending request for this issue in this room.");
-        coutEmptyLine();
-        coutBorder();
-        return;
+        coutEmptyLine(); coutBorder(); return;
     }
-    it->issue = issue; // Update the issue in the room
-    pending.push_back({num, issue}); // Add to pending list
-    coutBorder();
-    coutEmptyLine();
-    coutCentered("Request added.");
-    coutEmptyLine();
-    coutBorder();
+    roomptr->issue = issue;
+    pending.push_back({num, issue});
+    coutBorder(); coutEmptyLine();
+    coutCentered("Request added."); coutEmptyLine(); coutBorder();
 }
-
-// Displays all pending maintenance requests, sorted as in showRoomsByFloor
 void showPending() {
     if (pending.empty()) {
-        coutBorder();
-        coutEmptyLine();
-        coutCentered("No pending requests.");
-        coutEmptyLine();
-        coutBorder();
-        return;
+        coutBorder(); coutEmptyLine();
+        coutCentered("No pending requests."); coutEmptyLine(); coutBorder(); return;
     }
-    // Prepare to sort by floor and room number
-    vector<pair<int,string>> order;
+    vector<tuple<int,string,Room*>> order;
     for (const auto& req : pending) {
-        auto rit = find_if(rooms.begin(), rooms.end(),
-            [&](const Room& r){ return r.number == req.number; });
-        int fl = rit != rooms.end() ? rit->floor : 99;
-        order.push_back({fl, req.number});
+        for (auto& [floor, node] : building) {
+            for (auto& r : node.rooms) {
+                if (r.number == req.number) {
+                    order.emplace_back(floor, req.number, &r);
+                }
+            }
+        }
     }
-    // Sort: floor first, then room number as in showRoomsByFloor
-    sort(order.begin(), order.end(), [](const pair<int,string>& a, const pair<int,string>& b){
-        if (a.first != b.first) return a.first < b.first;
-        bool a_num = isFullyNumeric(a.second);
-        bool b_num = isFullyNumeric(b.second);
+    sort(order.begin(), order.end(), [](const tuple<int,string,Room*>& a, const tuple<int,string,Room*>& b){
+        if (get<0>(a) != get<0>(b)) return get<0>(a) < get<0>(b);
+        bool a_num = isFullyNumeric(get<1>(a));
+        bool b_num = isFullyNumeric(get<1>(b));
         if (a_num && !b_num) return true;
         if (!a_num && b_num) return false;
-        if (a_num && b_num) return stoi(a.second) < stoi(b.second);
+        if (a_num && b_num) return stoi(get<1>(a)) < stoi(get<1>(b));
         auto isCLRorECE = [](const string& num) {
             return num.find("CLR") == 0 || num.find("ECE") == 0;
         };
-        bool a_clr_ece = isCLRorECE(a.second);
-        bool b_clr_ece = isCLRorECE(b.second);
+        bool a_clr_ece = isCLRorECE(get<1>(a));
+        bool b_clr_ece = isCLRorECE(get<1>(b));
         if (a_clr_ece && !b_clr_ece) return true;
         if (!a_clr_ece && b_clr_ece) return false;
-        return a.second < b.second;
+        return get<1>(a) < get<1>(b);
     });
-    coutBorder();
-    coutEmptyLine();
-    coutCentered("Pending Requests:");
-    coutEmptyLine();
-    coutBorder();
-    // For each pending request, display the room info
-    for (const auto& o : order) {
-        auto rit = find_if(rooms.begin(), rooms.end(),
-            [&](const Room& r){ return r.number == o.second; });
-        if (rit != rooms.end()) showRoom(*rit);
-    }
+    coutBorder(); coutEmptyLine();
+    coutCentered("Pending Requests:"); coutEmptyLine(); coutBorder();
+    for (const auto& o : order) showRoom(get<0>(o), *get<2>(o));
 }
 
-// --- Main program loop ---
+// --- Main ---
 int main() {
-    deduplicate_rooms(); // Remove duplicates and prepare the 'rooms' vector
-
-    coutBorder();
-    coutEmptyLine();
-    // Display app welcome banner
+    buildTree();
+    coutBorder(); coutEmptyLine();
     cout << "*                              ░█▀▀░▀█▀░█░█░█▀▀░█▀█░█▀▄░█▀▀░▄▀▄░█░█░█▀▀░█▀▀░▀█▀                              *" << endl;
     cout << "*                              ░█▀▀░░█░░▄▀▄░█▀▀░█░█░█▀▄░█▀▀░█ █░█░█░█▀▀░▀▀█░░█░                              *" << endl;
     cout << "*                              ░▀░░░▀▀▀░▀░▀░▀▀▀░▀░▀░▀░▀░▀▀▀░░▀▀▀░▀░░▀▀▀░▀▀▀░░▀░                              *" << endl;
     coutCentered("Welcome to fixENrequest!");
-
-    coutEmptyLine();
-    coutBorder();
-    // Main menu loop
+    coutEmptyLine(); coutBorder();
     while (true) {
         coutEmptyLine();
         coutCentered("MAIN MENU");
@@ -486,8 +379,7 @@ int main() {
         coutLeftAlignedOption("                                             [3] Request Issue");
         coutLeftAlignedOption("                                             [4] Pending Requests");
         coutLeftAlignedOption("                                             [0] Exit");
-        coutEmptyLine(); 
-        coutBorder();
+        coutEmptyLine(); coutBorder();
         cout << "                                                 CHOICE: ";
         int ch; cin >> ch;
         if (cin.fail()) { cin.clear(); cin.ignore(10000,'\n'); continue; }
@@ -497,17 +389,12 @@ int main() {
         else if (ch == 4) showPending();
         else if (ch == 0) break;
         else {
-            coutBorder();
-            coutEmptyLine();
-            coutCentered("Invalid option.");
-            coutEmptyLine();
-            coutBorder();
+            coutBorder(); coutEmptyLine();
+            coutCentered("Invalid option."); coutEmptyLine(); coutBorder();
         }
     }
-    coutBorder();
-    coutEmptyLine();
+    coutBorder(); coutEmptyLine();
     coutCentered("Thank you for using fixENrequest!");
-    coutEmptyLine();
-    coutBorder();
+    coutEmptyLine(); coutBorder();
     return 0;
 }
